@@ -4,12 +4,14 @@ Class for controlling and plotting an arm with an arbitrary number of links.
 Author: Daniel Ingram
 """
 
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 
-
 class NLinkArm(object):
-    def __init__(self, link_lengths, joint_angles, goal, show_animation):
+
+    def __init__(self, link_lengths, joint_angles, goal, show_animation, obstacles=None):
+        
         self.show_animation = show_animation
         self.n_links = len(link_lengths)
         if self.n_links != len(joint_angles):
@@ -22,7 +24,11 @@ class NLinkArm(object):
         self.lim = sum(link_lengths)
         self.goal = np.array(goal).T
 
-        if show_animation:  # pragma: no cover
+        # getting a reference to the obstacles
+        self.obstacles = obstacles
+
+        if show_animation:
+            
             self.fig = plt.figure()
             self.fig.canvas.mpl_connect('button_press_event', self.click)
 
@@ -32,11 +38,12 @@ class NLinkArm(object):
         self.update_points()
 
     def update_joints(self, joint_angles):
-        self.joint_angles = joint_angles
 
+        self.joint_angles = joint_angles
         self.update_points()
 
     def update_points(self):
+
         for i in range(1, self.n_links + 1):
             self.points[i][0] = self.points[i - 1][0] + \
                 self.link_lengths[i - 1] * \
@@ -49,12 +56,19 @@ class NLinkArm(object):
         if self.show_animation:  # pragma: no cover
             self.plot()
 
-    def plot(self):  # pragma: no cover
+    def plot(self):
+        
         plt.cla()
         # for stopping simulation with the esc key.
         plt.gcf().canvas.mpl_connect('key_release_event',
                 lambda event: [exit(0) if event.key == 'escape' else None])
 
+       # drawing obstacles and shortest distances
+        for obstacle in self.obstacles:
+            plt.scatter(obstacle.x_pos, obstacle.y_pos, s=20, c='blue')
+            if obstacle.closest_point is not None:
+                plt.plot([obstacle.x_pos, obstacle.closest_point[0][0]], [obstacle.y_pos, obstacle.closest_point[0][1]], c='orange')
+                
         for i in range(self.n_links + 1):
             if i is not self.n_links:
                 plt.plot([self.points[i][0], self.points[i + 1][0]],

@@ -4,25 +4,24 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from NLinkArm import NLinkArm
+from obstacle_avoidance import joint_angles_to_lines, Obstacle
 
-# Simulation parameters
+# Simulation parameters (from the basic example)
 Kp = 2
 dt = 0.1
-N_LINKS = 2
+N_LINKS = 3
 N_ITERATIONS = 10000
-
-show_animation = True
 
 def animation():
 
-    # defining data buffers
+    # initializing the obstacles
+    obstacles = [Obstacle(1, 1), Obstacle(-1, 1)]
 
-
-    # defining the variable containers and the arm (at a random position)
+    # defining the variable containers and initializing the arm
     link_lengths = [1] * N_LINKS
     joint_angles = np.array([0] * N_LINKS)
-    goal_pos = get_random_goal()
-    arm = NLinkArm(link_lengths, joint_angles, goal_pos, show_animation)
+    goal_pos = [0, -2]
+    arm = NLinkArm(link_lengths, joint_angles, goal_pos, True, obstacles)
 
     joint_goal_angles, solution_found = inverse_kinematics(link_lengths, joint_angles, goal_pos)
 
@@ -42,7 +41,10 @@ def animation():
                 joint_angles = joint_angles + ang_diff(joint_goal_angles, joint_angles) * dt
                 joint_velocities = (joint_angles - prev_joint_angles)/dt 
                 
-                print(joint_velocities)
+                # computing the repulsion velocities
+                robot_segments = joint_angles_to_lines(joint_angles, link_lengths)
+                for obstacle in obstacles:
+                    obstacle.compute_closest_point(robot_segments)
 
             else: break
 
