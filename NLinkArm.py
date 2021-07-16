@@ -8,6 +8,8 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 
+from obstacle_avoidance import Obstacle
+
 class NLinkArm(object):
 
     def __init__(self, link_lengths, joint_angles, goal, show_animation, obstacles=None):
@@ -63,11 +65,7 @@ class NLinkArm(object):
         plt.gcf().canvas.mpl_connect('key_release_event',
                 lambda event: [exit(0) if event.key == 'escape' else None])
 
-       # drawing obstacles and shortest distances
-        for obstacle in self.obstacles:
-            plt.scatter(obstacle.x_pos, obstacle.y_pos, s=20, c='blue')
-            if obstacle.closest_point is not None:
-                plt.plot([obstacle.x_pos, obstacle.closest_point[0][0]], [obstacle.y_pos, obstacle.closest_point[0][1]], c='orange')
+        Obstacle.display_obstacles(self.obstacles, plt)
                 
         for i in range(self.n_links + 1):
             if i is not self.n_links:

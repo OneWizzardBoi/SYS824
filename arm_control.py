@@ -1,31 +1,40 @@
 import sys
+import time
+import copy
 import numpy as np
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from NLinkArm import NLinkArm
-from obstacle_avoidance import joint_angles_to_lines, Obstacle
+from obstacle_avoidance import Obstacle
 
 # Simulation parameters (from the basic example)
-Kp = 2
-dt = 0.1
+Kp = 1
+dt = 0.1 # 0.1 seconds
 N_LINKS = 3
 N_ITERATIONS = 10000
+command_ang_velocity = 1 # rad/s
 
 def animation():
 
     # initializing the obstacles
-    obstacles = [Obstacle(1, 1), Obstacle(-1, 1)]
+    #obstacles = [Obstacle(0.5, 2.3, [0.5, 0]), Obstacle(-1, 2.3, [0.5, 0])]
+    obstacles = [Obstacle(-1, 2.3, [0.5, 0])]
 
     # defining the variable containers and initializing the arm
     link_lengths = [1] * N_LINKS
     joint_angles = np.array([0] * N_LINKS)
-    goal_pos = [0, -2]
+    goal_pos = [0, 2]
     arm = NLinkArm(link_lengths, joint_angles, goal_pos, True, obstacles)
 
+    # getting the inverse kinematics solution (joint_goal_angles)
     joint_goal_angles, solution_found = inverse_kinematics(link_lengths, joint_angles, goal_pos)
 
     if solution_found:
+
+        # velocity calculation vars
+        prev_joint_angles = copy.deepcopy(joint_angles)
+        prev_joint_positions = copy.deepcopy(arm.points)
 
         while True:
         
@@ -36,29 +45,34 @@ def animation():
 
             if distance > 0.1 and all(old_goal == goal_pos):
 
-                # getting the angular velocities (for going towards the goal)
-                prev_joint_angles = joint_angles
-                joint_angles = joint_angles + ang_diff(joint_goal_angles, joint_angles) * dt
-                joint_velocities = (joint_angles - prev_joint_angles)/dt 
-                
+                # getting the angular velocities + the relative velocity (obstacle - robot)
+                joint_angular_velocities = (joint_angles - prev_joint_angles)/dt
+
                 # computing the repulsion velocities
-                robot_segments = joint_angles_to_lines(joint_angles, link_lengths)
+                repulsion_velocities = []
                 for obstacle in obstacles:
-                    obstacle.compute_closest_point(robot_segments)
+                    obstacle.compute_closest_point(arm.points)
+                    obstacle.compute_relative_velocity(prev_joint_positions, link_lengths, dt)
+                    repulsion_velocities.append(obstacle.compute_repulsion_vector())
+
+                for i, velocity in enumerate(repulsion_velocities):
+                    print(f"obstacle #{i+1} 's repulsion velocity magnitude: {velocity.magnitude}")
+                
+                # storing the current arm positions before update
+                prev_joint_angles = copy.deepcopy(joint_angles)
+                prev_joint_positions = copy.deepcopy(arm.points)
+
+                # updating the arm's joint angles + updating obstacle positions
+                
+                #TODO : this is where the repulsion contribution  needs to be computed
+                
+                
+                joint_angles = joint_angles + Kp * ang_diff(joint_goal_angles, joint_angles) * dt
+                for obstacle in obstacles: obstacle.update_position(dt)
+
+                arm.update_joints(joint_angles)
 
             else: break
-
-            arm.update_joints(joint_angles)
-
-
-def get_random_goal():
-
-    ''' Returns random coordinates '''
-
-    from random import random
-    SAREA = 3.0
-    return [SAREA * random() - SAREA / 2.0,
-            SAREA * random() - SAREA / 2.0]
 
 
 def inverse_kinematics(link_lengths, joint_angles, goal_pos):
