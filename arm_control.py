@@ -6,7 +6,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from NLinkArm import NLinkArm
-from obstacle_avoidance import Obstacle
+from obstacle_avoidance import ClosestPoint, Obstacle
 
 # Simulation parameters (from the basic example)
 Kp = 1
@@ -65,9 +65,14 @@ def animation():
                 # updating the arm's joint angles + updating obstacle positions
                 
                 #TODO : this is where the repulsion contribution  needs to be computed
+                q_rep = partial_jacobian_inverse(link_lengths, joint_angles[0:obstacle.closest_point.segment_index])@velocity.vector
+                while len(q_rep) < N_LINKS:
+                    q_rep = np.append(q_rep,0)
+
+                print(q_rep)
+                joint_angular_velocities = ang_diff(joint_goal_angles, joint_angles) + q_rep
                 
-                
-                joint_angles = joint_angles + Kp * ang_diff(joint_goal_angles, joint_angles) * dt
+                joint_angles = joint_angles + joint_angular_velocities*dt#Kp * ang_diff(joint_goal_angles, joint_angles) * dt#
                 for obstacle in obstacles: obstacle.update_position(dt)
 
                 arm.update_joints(joint_angles)
@@ -104,6 +109,17 @@ def jacobian_inverse(link_lengths, joint_angles):
         J[0, i] = 0
         J[1, i] = 0
         for j in range(i, N_LINKS):
+            J[0, i] -= link_lengths[j] * np.sin(np.sum(joint_angles[:j]))
+            J[1, i] += link_lengths[j] * np.cos(np.sum(joint_angles[:j]))
+
+    return np.linalg.pinv(J)
+
+def partial_jacobian_inverse(link_lengths, joint_angles):
+    J = np.zeros((2, len(joint_angles)+1))
+    for i in range(len(joint_angles)+1):
+        J[0, i] = 0
+        J[1, i] = 0
+        for j in range(i, len(joint_angles)+1):
             J[0, i] -= link_lengths[j] * np.sin(np.sum(joint_angles[:j]))
             J[1, i] += link_lengths[j] * np.cos(np.sum(joint_angles[:j]))
 

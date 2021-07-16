@@ -55,8 +55,8 @@ class Obstacle():
     d1 = 0.40 # minimum radius for repulsion activation (orange circle)
     cv = 0.5 # repulsion radius sizing constant
     dcr = 0.15 # critical distance (black circle)
-    k1 = 0.5 # vrep1 amplitude constant
-    k2 = 0.5 # vrep2 amplitude constant
+    k1 = 2 # vrep1 amplitude constant
+    k2 = 1 # vrep2 amplitude constant
     l1 = d1 # lower bound for the damping force (below this c=1)
     l2 = l1 + 0.3 # upper bound for damping force (above this c=0)
 
