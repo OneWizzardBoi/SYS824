@@ -52,13 +52,14 @@ class Obstacle():
     ''' Class implementing the mathematical modelisation and display of 2D obstacles '''
 
     # mathematical model constants
-    d1 = 0.40 # minimum radius for repulsion activation (orange circle)
-    cv = 0.5 # repulsion radius sizing constant
-    dcr = 0.15 # critical distance (black circle)
-    k1 = 2 # vrep1 amplitude constant
-    k2 = 1 # vrep2 amplitude constant
-    l1 = d1 # lower bound for the damping force (below this c=1)
-    l2 = l1 + 0.3 # upper bound for damping force (above this c=0)
+    dcr = 0.2      # critical distance (black circle)
+    d1 = 0.4       # minimum radius for repulsion activation (orange circle)
+    cv = 1         # repulsion radius sizing constant
+    k1 = 4         # vrep1 amplitude constant
+    k2 = 2         # vrep2 amplitude constant
+    l1 = d1        # lower bound for the damping force (below this c=1)
+    l2 = l1 + 0.2  # upper bound for damping force (above this c=0)
+    dmax = l2      # maximum radius for repulsion activatio
 
     def __init__(self, x_pos, y_pos, velocity=[0,0]):
 
@@ -144,7 +145,7 @@ class Obstacle():
                 c_point = (segment[2], segment[3])
                 seg_pos = 1
             # handling when the nearest point is on the segment
-            else: 
+            else:
                 c_point = intersect_info[0]
                 seg_pos = intersect_info[1]
 
@@ -171,24 +172,21 @@ class Obstacle():
         segment_i = self.closest_point.segment_index
         l1 = (prev_joint_positions[segment_i + 1][0] - prev_joint_positions[segment_i][0])
         l2 = (prev_joint_positions[segment_i + 1][1] - prev_joint_positions[segment_i][1])
-        theta = math.atan(l2/l1)
+        theta = math.atan2(l2, l1)
         x_diff = self.closest_point.segment_pos * link_lengths[segment_i] * math.cos(theta)
         y_diff = self.closest_point.segment_pos * link_lengths[segment_i] * math.sin(theta)
         x_prev = prev_joint_positions[segment_i][0] + x_diff
         y_prev = prev_joint_positions[segment_i][1] + y_diff
        
-        # calculating the closest point velocity
-        cp_velocity = math.sqrt(((self.closest_point.coordinates[0] - x_prev)/dt)**2 + ((self.closest_point.coordinates[1] - y_prev)/dt)**2)
-       
-        # calculating the relative velocity
-        #TODO : fix bug instead of hot fix (prevent vrel from increasin 1000% when closest point changes robot segment)
-        self.prev_vrel = self.vrel
+        # calculating the closest point velocity + calculating the relative velocity
+        cp_velocity = math.sqrt((self.closest_point.coordinates[0] - x_prev)**2 + (self.closest_point.coordinates[1] - y_prev)**2) / dt
         self.vrel = self.velocity_mod - cp_velocity
-        if abs(self.vrel / self.prev_vrel) > 2: self.vrel = self.prev_vrel
 
         # updating d0, since it depends on vrel
         self.d0 = self.d1
-        if self.vrel < 0: self.d0 = self.d1 - (self.vrel * self.cv)
+        if self.vrel < 0: 
+            self.d0 = self.d1 - (self.vrel * self.cv)
+            if self.d0 > self.dmax: self.d0 = self.dmax
 
 
     def compute_repulsion_vector(self):
@@ -201,13 +199,12 @@ class Obstacle():
             vrep1 = self.k1 * ((self.d0/(dmin-self.dcr)) - 1)
 
         # calculating vrep2
+        c = 0
         vrep2 = 0
         if self.vrel < 0:
-            
-            c = 0
-            if dmin < self.l1: 
+            if dmin <= self.l1: 
                 c = 1
-            elif (self.l1 < dmin) and (self.l2 > dmin):
+            elif (self.l1 < dmin) and (self.l2 >= dmin):
                 c = (1 + math.cos(math.pi*(dmin - self.l1) / (self.l2 - self.l1))) / 2 
             
             vrep2 = -1 * c * self.k2 * self.vrel

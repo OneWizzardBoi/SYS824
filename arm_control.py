@@ -1,6 +1,6 @@
 import sys
-import time
 import copy
+import math
 import numpy as np
 from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -9,7 +9,7 @@ from NLinkArm import NLinkArm
 from obstacle_avoidance import ClosestPoint, Obstacle
 
 # Simulation parameters (from the basic example)
-Kp = 1
+Kp = 1.5
 dt = 0.1 # 0.1 seconds
 N_LINKS = 3
 N_ITERATIONS = 10000
@@ -18,8 +18,7 @@ command_ang_velocity = 1 # rad/s
 def animation():
 
     # initializing the obstacles
-    #obstacles = [Obstacle(0.5, 2.3, [0.5, 0]), Obstacle(-1, 2.3, [0.5, 0])]
-    obstacles = [Obstacle(-1, 2.3, [0.5, 0])]
+    obstacles = [Obstacle(-1, 2.4, [0.7, 0]), Obstacle(-2, 2.4, [0.7, 0])]
 
     # defining the variable containers and initializing the arm
     link_lengths = [1] * N_LINKS
@@ -32,9 +31,14 @@ def animation():
 
     if solution_found:
 
+        # time tracking vars
+        iter_i = 0
+        rep_application_i = 0
+
         # velocity calculation vars
-        prev_joint_angles = copy.deepcopy(joint_angles)
-        prev_joint_positions = copy.deepcopy(arm.points)
+        prev_joint_angles = joint_angles
+        prev_joint_positions = arm.points
+        q_rep_total = np.array([0] * N_LINKS, dtype=np.float)
 
         while True:
         
@@ -55,29 +59,40 @@ def animation():
                     obstacle.compute_relative_velocity(prev_joint_positions, link_lengths, dt)
                     repulsion_velocities.append(obstacle.compute_repulsion_vector())
 
-                for i, velocity in enumerate(repulsion_velocities):
-                    print(f"obstacle #{i+1} 's repulsion velocity magnitude: {velocity.magnitude}")
-                
                 # storing the current arm positions before update
                 prev_joint_angles = copy.deepcopy(joint_angles)
                 prev_joint_positions = copy.deepcopy(arm.points)
 
-                # updating the arm's joint angles + updating obstacle positions
-                
-                #TODO : this is where the repulsion contribution  needs to be computed
-                q_rep = partial_jacobian_inverse(link_lengths, joint_angles[0:obstacle.closest_point.segment_index])@velocity.vector
-                while len(q_rep) < N_LINKS:
-                    q_rep = np.append(q_rep,0)
+                # computing the joint velocities vector due to the repulsion vector
+                q_rep_total = np.array([0] * N_LINKS, dtype=np.float)
+                for velocity in repulsion_velocities:
+                    q_rep = partial_jacobian_inverse(link_lengths, joint_angles[0 : obstacle.closest_point.segment_index]) @ velocity.vector 
+                    q_rep_total += np.pad(q_rep, (0, N_LINKS-len(q_rep)))
 
-                print(q_rep)
-                joint_angular_velocities = ang_diff(joint_goal_angles, joint_angles) + q_rep
+                for i, velocity in enumerate(repulsion_velocities):
+                    print(f"obstacle #{i+1} 's repulsion velocity magnitude: {velocity.magnitude}")
+
+                # marking the times repulsion velocity drops to 0
+                if not np.all((q_rep_total == 0)): rep_application_i = iter_i
+
+                # choosing between the (command) joint velocities and the repulsion joint velocities
+                if np.all((q_rep_total == 0)):
+                    sizing_f = 1 - math.exp(-1 * (iter_i - rep_application_i)/ 15)
+                    joint_angular_velocities = sizing_f * (Kp * ang_diff(joint_goal_angles, joint_angles))
+                else:
+                    joint_angular_velocities = q_rep_total
                 
-                joint_angles = joint_angles + joint_angular_velocities*dt#Kp * ang_diff(joint_goal_angles, joint_angles) * dt#
+                # updating the joint angles with the newly computed velocities
+                #joint_angles = joint_angles + Kp * ang_diff(joint_goal_angles, joint_angles) * dt
+                joint_angles = joint_angles + joint_angular_velocities*dt
+                
+                # updating the arm state and graph
                 for obstacle in obstacles: obstacle.update_position(dt)
-
                 arm.update_joints(joint_angles)
 
             else: break
+
+            iter_i += 1
 
 
 def inverse_kinematics(link_lengths, joint_angles, goal_pos):
@@ -113,6 +128,7 @@ def jacobian_inverse(link_lengths, joint_angles):
             J[1, i] += link_lengths[j] * np.cos(np.sum(joint_angles[:j]))
 
     return np.linalg.pinv(J)
+
 
 def partial_jacobian_inverse(link_lengths, joint_angles):
     J = np.zeros((2, len(joint_angles)+1))
