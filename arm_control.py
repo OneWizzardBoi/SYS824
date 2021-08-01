@@ -1,12 +1,15 @@
 import sys
+import time
 import copy
 import math
 import numpy as np
-from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from NLinkArm import NLinkArm
+from movement_recorder import MovementRecorder
 from obstacle_avoidance import ClosestPoint, Obstacle
+
+# setting the control equation
+control_mode = 2
 
 # Simulation parameters (from the basic example)
 Kp = 1.5
@@ -15,7 +18,17 @@ N_LINKS = 3
 N_ITERATIONS = 10000
 command_ang_velocity = 1 # rad/s
 
+#TODO:this should be changed accoring to your set up
+series_key = "aucun evitement"
+point_data_file_path = "/home/one_wizard_boi/Documents/Projects/SYS824/SYS824/point_data.json" 
+
 def animation():
+
+    # preparing the recording of points
+    m_recorder = MovementRecorder(point_data_file_path)
+    try: m_recorder.remove_series(series_key)
+    except: pass
+    m_recorder.add_series(series_key)
 
     # initializing the obstacles
     obstacles = [Obstacle(-1, 2.4, [0.7, 0]), Obstacle(-2, 2.4, [0.7, 0])]
@@ -74,25 +87,38 @@ def animation():
 
                 # marking the times repulsion velocity drops to 0
                 if not np.all((q_rep_total == 0)): rep_application_i = iter_i
-
-                # choosing between the (command) joint velocities and the repulsion joint velocities
-                if np.all((q_rep_total == 0)):
-                    sizing_f = 1 - math.exp(-1 * (iter_i - rep_application_i)/ 15)
-                    joint_angular_velocities = sizing_f * (Kp * ang_diff(joint_goal_angles, joint_angles))
-                else:
-                    joint_angular_velocities = q_rep_total
+                
+                # computing the robot joint velocities
+                if control_mode == 0:
+                    # (commutation) : choosing between the (command) joint velocities and the repulsion joint velocities
+                    if np.all((q_rep_total == 0)):
+                        sizing_f = 1 - math.exp(-1 * (iter_i - rep_application_i)/ 15)
+                        joint_angular_velocities = sizing_f * (Kp * ang_diff(joint_goal_angles, joint_angles))
+                    else:
+                        joint_angular_velocities = q_rep_total
+                elif control_mode == 1:
+                    # (addition) : adding the command velocities to the repulsion velocities
+                    joint_angular_velocities = (Kp * ang_diff(joint_goal_angles, joint_angles)) + q_rep_total
+                elif control_mode == 2:
+                    # (no avoidance) : only the control velocities
+                    joint_angular_velocities = (Kp * ang_diff(joint_goal_angles, joint_angles))
                 
                 # updating the joint angles with the newly computed velocities
-                #joint_angles = joint_angles + Kp * ang_diff(joint_goal_angles, joint_angles) * dt
-                joint_angles = joint_angles + joint_angular_velocities*dt
+                joint_angles = joint_angles + joint_angular_velocities * dt
                 
                 # updating the arm state and graph
+                m_recorder.add_point(series_key, arm.points[-1].copy())
                 for obstacle in obstacles: obstacle.update_position(dt)
                 arm.update_joints(joint_angles)
 
             else: break
 
+            # freezing the display, so it can be maximized
+            if iter_i == 0 : time.sleep(4)
             iter_i += 1
+
+        # saving the recorded points
+        m_recorder.write_positions_file()
 
 
 def inverse_kinematics(link_lengths, joint_angles, goal_pos):

@@ -23,7 +23,7 @@ class NLinkArm(object):
         self.joint_angles = np.array(joint_angles)
         self.points = [[0, 0] for _ in range(self.n_links + 1)]
 
-        self.lim = sum(link_lengths)
+        self.lim = sum(link_lengths) + 1
         self.goal = np.array(goal).T
 
         # getting a reference to the obstacles
