@@ -7,3 +7,5 @@
 ### Installing python requirements
     - pip3 install -r requirements.txt
     
+### Run the code
+    - Run arm_control.py (python arm_control.py)
