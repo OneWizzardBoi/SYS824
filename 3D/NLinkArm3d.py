@@ -52,7 +52,7 @@ class NLinkArm:
 
     ''' Class implementing a multi-segment robot '''
 
-    max_distance_error = 0.01
+    max_distance_error = 0.05
 
     def __init__(self, dh_params_list, ee_target_pose):
 
@@ -68,6 +68,11 @@ class NLinkArm:
         self.link_list = []
         for i in range(len(dh_params_list)):
             self.link_list.append(Link(dh_params_list[i]))
+
+        # setting up the display and first display
+        self.fig = plt.figure()
+        self.ax = Axes3D(self.fig)
+        self.fig.show()
 
 
     def transformation_matrix(self):
@@ -187,14 +192,13 @@ class NLinkArm:
             self.link_list[i].dh_params_[0] += diff_joint_angle_list[i]
     
 
-    def plot(self):
+    def update_display(self):
 
         ''' Displaying the robot's joints and segments '''
 
-        self.fig = plt.figure()
-        self.ax = Axes3D(self.fig)
+        plt.cla()
 
-        # containers for the joint coordinates
+        # defining containers for the joint coordinates
         x_list = []
         y_list = []
         z_list = []
@@ -219,8 +223,10 @@ class NLinkArm:
         # plotting the target point
         self.ax.plot(self.ee_target_pose[0], self.ee_target_pose[1], self.ee_target_pose[2], 'gx', color="#03fc03")
 
-        # setting limits and displaying
+        # setting limits
         self.ax.set_xlim(-3, 3)
         self.ax.set_ylim(-3, 3)
         self.ax.set_zlim(-3, 3)
-        plt.show()
+        
+        plt.draw()
+        plt.pause(0.0001)
