@@ -4,6 +4,8 @@ import numpy.linalg
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
+from obstacle_avoidance import Obstacle
+
 
 class Link:
 
@@ -54,15 +56,17 @@ class NLinkArm:
 
     max_distance_error = 0.05
 
-    def __init__(self, dh_params_list, ee_target_poses):
+    def __init__(self, dh_params_list, ee_target_poses, obstacles=None):
 
         '''
         Parameters
         ----------
         dh_params_list : denavit-Hartenberg parameters for the robot
         ee_target_poses : target poses wich the robot must reach sequentially
+        obstacles: list of the obstacle objects in the robot's environment
         '''
 
+        self.obstacles = obstacles
         self.ee_target_poses = ee_target_poses
 
         self.link_list = []
@@ -177,6 +181,35 @@ class NLinkArm:
         return alpha, beta, gamma
 
 
+    def get_joint_positions(self, plot_format=False):
+
+        ''' Returns the (X,Y,Z) coordinates of the robots joints '''
+
+        x_list = []
+        y_list = []
+        z_list = []
+
+        # robot base coordinates [0, 0, 0]
+        trans = np.identity(4)
+        x_list.append(trans[0, 3])
+        y_list.append(trans[1, 3])
+        z_list.append(trans[2, 3])
+
+        # getting the joint coordinates by going through the T0-n matrices
+        for i in range(len(self.link_list)):
+            trans = np.dot(trans, self.link_list[i].transformation_matrix())
+            x_list.append(trans[0, 3])
+            y_list.append(trans[1, 3])
+            z_list.append(trans[2, 3])
+
+        # returning the coordinates in the appropriate format
+        if plot_format: 
+            return x_list, y_list, z_list
+        else:
+            return [(x_list[pos_i], y_list[pos_i], z_list[pos_i]) 
+                        for pos_i in range(len(x_list))]
+
+
     def get_joint_angles(self):
         ''' Getting the (theta) variable in the Denavit-Hartenberg parameters '''
         return [self.link_list[i].dh_params_[0] for i in range(len(self.link_list))]
@@ -196,26 +229,11 @@ class NLinkArm:
 
         ''' Displaying the robot's joints and segments '''
 
-        plt.cla()
-
-        # defining containers for the joint coordinates
-        x_list = []
-        y_list = []
-        z_list = []
-
-        # robot base coordinates [0, 0, 0]
-        trans = np.identity(4)
-        x_list.append(trans[0, 3])
-        y_list.append(trans[1, 3])
-        z_list.append(trans[2, 3])
-        # getting the joint coordinates by going through the T0-n matrices
-        for i in range(len(self.link_list)):
-            trans = np.dot(trans, self.link_list[i].transformation_matrix())
-            x_list.append(trans[0, 3])
-            y_list.append(trans[1, 3])
-            z_list.append(trans[2, 3])
+        # getting the robot's joint positions
+        x_list, y_list, z_list = self.get_joint_positions(plot_format=True)
 
         # plotting the robot's joints and segments
+        plt.cla()
         self.ax.plot(x_list, y_list, z_list, "o-", color="#0331fc", ms=4, mew=0.5)
         self.ax.plot(x_list[0], y_list[0], z_list[0], 'o', color="#000000")
         self.ax.plot(x_list[-1], y_list[-1], z_list[-1], 'o', color="#ed0707")
@@ -223,6 +241,9 @@ class NLinkArm:
         # plotting the target point
         for ee_target_pose in self.ee_target_poses: 
             self.ax.plot(ee_target_pose[0], ee_target_pose[1], ee_target_pose[2], 'gx', color="#03fc03")
+
+        # plotting the obstacles
+        Obstacle.display_obstacles(self.obstacles, self.ax)
 
         # setting limits
         self.ax.set_xlim(-3, 3)

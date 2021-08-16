@@ -2,6 +2,8 @@ import math
 import copy
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
+import mpl_toolkits.mplot3d.art3d as art3d
 from mathutils.geometry import intersect_point_line
 
 
@@ -14,16 +16,16 @@ class RepulsionVelocity():
         '''
         Parameters
         ----------
-        vector (np.array([float, float])): the velocity vector
-        obs_coorinates ([float, float]) : coordinates of the obstacle from which the vector originates
-        closest_point ([float, float]) : coordinates of the closest point on the robot which the vector affects
+        vector (np.array([float, float, float])): the velocity vector
+        obs_coorinates ([float, float, float]) : coordinates of the obstacle from which the vector originates
+        closest_point ([float, float, float]) : coordinates of the closest point on the robot which the vector affects
         '''
 
         self.vector = vector
         self.obs_coordinates = obs_coordinates
         self.closest_point = closest_point
 
-        self.magnitude = math.sqrt(self.vector[0]**2 + self.vector[1]**2)
+        self.magnitude = math.sqrt(self.vector[0]**2 + self.vector[1]**2 + self.vector[2]**2)
 
 
 class ClosestPoint():
@@ -35,7 +37,7 @@ class ClosestPoint():
         '''
         Parameters
         ----------
-        coordinates : tuple containing the (x, y) coordinates of the point
+        coordinates : tuple containing the (x, y, z) coordinates of the point
         distance : distane between the obstacle and the closest point
         segment_index : identifies the robot segment the point belongs to
         segment_pos : specifies the percentage [0, 1] of the length of the segment where the point is situated
@@ -49,7 +51,7 @@ class ClosestPoint():
 
 class Obstacle():
 
-    ''' Class implementing the mathematical modelisation and display of 2D obstacles '''
+    ''' Class implementing the mathematical modelisation and display of 3D obstacles '''
 
     # mathematical model constants
     dcr = 0.2      # critical distance (black circle)
@@ -61,21 +63,28 @@ class Obstacle():
     l2 = l1 + 0.2  # upper bound for damping force (above this c=0)
     dmax = l2      # maximum radius for repulsion activatio
 
-    def __init__(self, x_pos, y_pos, velocity=[0,0]):
+    # graphic display boudaries
+    display_max = 3
+    display_min = -3
+
+
+    def __init__(self, x_pos, y_pos, z_pos, velocity=[0,0,0]):
 
         '''
         Parameters
         ----------
         x_pos (float) : the obstacle's initial x coordinate 
-        x_pos (float) : the obstacle's initial y coordinate
-        velocity ([float, float]) : the obstacle's velocity vector i.e [x velocity, y velocity]
+        y_pos (float) : the obstacle's initial y coordinate
+        z_pos (float) : the obstacle's initial y coordinate
+        velocity ([float, float, float]) : the obstacle's velocity vector i.e [x velocity, y velocity, z velocity]
         '''
 
         # specifying the spawn position
-        self.x_pos = x_pos
-        self.y_pos = y_pos
-        self.velocity = velocity
-        self.velocity_mod = math.sqrt(self.velocity[0]**2 + self.velocity[1]**2)
+        self.init_x = self.x_pos = x_pos
+        self.init_y = self.y_pos = y_pos
+        self.init_z = self.z_pos = z_pos
+        self.velocity = np.array(velocity)
+        self.velocity_mod = math.sqrt(self.velocity[0]**2 + self.velocity[1]**2 + self.velocity[2]**2)
 
         self.vrel = 1
         self.prev_vrel = 1
@@ -84,30 +93,41 @@ class Obstacle():
     
 
     @classmethod
-    def display_obstacles(cls, obstacles, plt):
+    def display_obstacles(cls, obstacles, ax):
 
         for obstacle in obstacles:
 
             # displaying the obstacle
-            plt.scatter(obstacle.x_pos, obstacle.y_pos, s=20, c='black')
-            l1_radius = plt.Circle((obstacle.x_pos, obstacle.y_pos), obstacle.l1, facecolor='none', edgecolor='blue')
-            l2_radius = plt.Circle((obstacle.x_pos, obstacle.y_pos), obstacle.l2, facecolor='none', edgecolor='blue')
-            do_radius = plt.Circle((obstacle.x_pos, obstacle.y_pos), obstacle.d0, facecolor='none', edgecolor='orange')
-            dcr_radius = plt.Circle((obstacle.x_pos, obstacle.y_pos), obstacle.dcr, facecolor='none', edgecolor='black')
-            plt.gca().add_patch(l1_radius)
-            plt.gca().add_patch(l2_radius)
-            plt.gca().add_patch(do_radius)
-            plt.gca().add_patch(dcr_radius)
-            
+            ax.plot(obstacle.x_pos, obstacle.y_pos, obstacle.z_pos, 'o', color="#000000")
+            dcr_radius_1 = plt.Circle((obstacle.x_pos, obstacle.y_pos), obstacle.dcr, facecolor='none', edgecolor='black')
+            dcr_radius_2 = plt.Circle((obstacle.y_pos, obstacle.z_pos), obstacle.dcr, facecolor='none', edgecolor='black')
+            do_radius_1 = plt.Circle((obstacle.x_pos, obstacle.y_pos), obstacle.d0, facecolor='none', edgecolor='orange')
+            do_radius_2 = plt.Circle((obstacle.y_pos, obstacle.z_pos), obstacle.d0, facecolor='none', edgecolor='orange')
+            ax.add_patch(dcr_radius_1)
+            ax.add_patch(dcr_radius_2)
+            ax.add_patch(do_radius_1)
+            ax.add_patch(do_radius_2)
+            art3d.pathpatch_2d_to_3d(dcr_radius_1, z=obstacle.z_pos, zdir="z")
+            art3d.pathpatch_2d_to_3d(dcr_radius_2, z=obstacle.x_pos, zdir="x")
+            art3d.pathpatch_2d_to_3d(do_radius_1, z=obstacle.z_pos, zdir="z")
+            art3d.pathpatch_2d_to_3d(do_radius_2, z=obstacle.x_pos, zdir="x")
+                        
             # displaying shortest distance
-            if obstacle.closest_point is not None:
-                plt.plot([obstacle.x_pos, obstacle.closest_point.coordinates[0]], [obstacle.y_pos, obstacle.closest_point.coordinates[1]], c='orange')
+            #if obstacle.closest_point is not None:
+                #ax.plot([obstacle.x_pos, obstacle.closest_point.coordinates[0]], [obstacle.y_pos, obstacle.closest_point.coordinates[1]], c='orange')
 
 
     def update_position(self, dt):
         
+        # making sure the obstacle stays in the boudaries
+        if not (self.x_pos <= self.display_max and self.x_pos >= self.display_min) and\
+               (self.y_pos <= self.display_max and self.y_pos >= self.display_min) and\
+               (self.z_pos <= self.display_max and self.z_pos >= self.display_min):
+            self.velocity *= -1
+        
         self.x_pos += self.velocity[0]*dt
         self.y_pos += self.velocity[1]*dt
+        self.z_pos += self.velocity[2]*dt
 
 
     def compute_closest_point(self, arm_points):
@@ -118,7 +138,6 @@ class Obstacle():
         Parameters
         ----------
         arm_points : the coordinates of each of the arm's points ie. [[x1, y1], [x2, y2]] "
-
         '''
 
         robot_segments = []

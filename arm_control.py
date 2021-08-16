@@ -34,7 +34,6 @@ def animation():
         rep_application_i = 0
 
         # velocity calculation vars
-        prev_joint_angles = joint_angles
         prev_joint_positions = arm.points
         q_rep_total = np.array([0] * N_LINKS, dtype=np.float)
 
@@ -47,18 +46,12 @@ def animation():
 
             if distance > 0.1 and all(old_goal == goal_pos):
 
-                # getting the angular velocities + the relative velocity (obstacle - robot)
-                joint_angular_velocities = (joint_angles - prev_joint_angles)/dt
-
-                # computing the repulsion velocities
+                # computing the repulsion velocities + keeping track of joint positions
                 repulsion_velocities = []
                 for obstacle in obstacles:
                     obstacle.compute_closest_point(arm.points)
                     obstacle.compute_relative_velocity(prev_joint_positions, link_lengths, dt)
                     repulsion_velocities.append(obstacle.compute_repulsion_vector())
-
-                # storing the current arm positions before update
-                prev_joint_angles = copy.deepcopy(joint_angles)
                 prev_joint_positions = copy.deepcopy(arm.points)
 
                 # computing the joint velocities vector due to the repulsion vector
