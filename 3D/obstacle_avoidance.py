@@ -1,6 +1,7 @@
 import math
 import copy
 import numpy as np
+import numpy.linalg
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 import mpl_toolkits.mplot3d.art3d as art3d
@@ -24,8 +25,7 @@ class RepulsionVelocity():
         self.vector = vector
         self.obs_coordinates = obs_coordinates
         self.closest_point = closest_point
-
-        self.magnitude = math.sqrt(self.vector[0]**2 + self.vector[1]**2 + self.vector[2]**2)
+        self.magnitude = np.linalg.norm(self.vector)
 
 
 class ClosestPoint():
@@ -84,7 +84,7 @@ class Obstacle():
         self.init_y = self.y_pos = y_pos
         self.init_z = self.z_pos = z_pos
         self.velocity = np.array(velocity)
-        self.velocity_mod = math.sqrt(self.velocity[0]**2 + self.velocity[1]**2 + self.velocity[2]**2)
+        self.velocity_norm = np.linalg.norm(self.velocity)
 
         self.vrel = 1
         self.prev_vrel = 1
@@ -98,70 +98,78 @@ class Obstacle():
         for obstacle in obstacles:
 
             # displaying the obstacle
+
             ax.plot(obstacle.x_pos, obstacle.y_pos, obstacle.z_pos, 'o', color="#000000")
             dcr_radius_1 = plt.Circle((obstacle.x_pos, obstacle.y_pos), obstacle.dcr, facecolor='none', edgecolor='black')
             dcr_radius_2 = plt.Circle((obstacle.y_pos, obstacle.z_pos), obstacle.dcr, facecolor='none', edgecolor='black')
+            dcr_radius_3 = plt.Circle((obstacle.x_pos, obstacle.z_pos), obstacle.dcr, facecolor='none', edgecolor='black')
             do_radius_1 = plt.Circle((obstacle.x_pos, obstacle.y_pos), obstacle.d0, facecolor='none', edgecolor='orange')
             do_radius_2 = plt.Circle((obstacle.y_pos, obstacle.z_pos), obstacle.d0, facecolor='none', edgecolor='orange')
+            do_radius_3 = plt.Circle((obstacle.x_pos, obstacle.z_pos), obstacle.d0, facecolor='none', edgecolor='orange')
+
             ax.add_patch(dcr_radius_1)
             ax.add_patch(dcr_radius_2)
+            ax.add_patch(dcr_radius_3)
             ax.add_patch(do_radius_1)
             ax.add_patch(do_radius_2)
+            ax.add_patch(do_radius_3)
+            
             art3d.pathpatch_2d_to_3d(dcr_radius_1, z=obstacle.z_pos, zdir="z")
             art3d.pathpatch_2d_to_3d(dcr_radius_2, z=obstacle.x_pos, zdir="x")
+            art3d.pathpatch_2d_to_3d(dcr_radius_3, z=obstacle.y_pos, zdir="y")
             art3d.pathpatch_2d_to_3d(do_radius_1, z=obstacle.z_pos, zdir="z")
             art3d.pathpatch_2d_to_3d(do_radius_2, z=obstacle.x_pos, zdir="x")
-                        
+            art3d.pathpatch_2d_to_3d(do_radius_3, z=obstacle.y_pos, zdir="y")
+
             # displaying shortest distance
-            #if obstacle.closest_point is not None:
-                #ax.plot([obstacle.x_pos, obstacle.closest_point.coordinates[0]], [obstacle.y_pos, obstacle.closest_point.coordinates[1]], c='orange')
+            if obstacle.closest_point is not None:
+                ax.plot([obstacle.x_pos, obstacle.closest_point.coordinates[0]], [obstacle.y_pos, obstacle.closest_point.coordinates[1]],\
+                        [obstacle.z_pos, obstacle.closest_point.coordinates[2]], c='#a434eb')
 
 
     def update_position(self, dt):
         
-        # making sure the obstacle stays in the boudaries
+        # flipping the velocities when the display dboundary is reached
         if not (self.x_pos <= self.display_max and self.x_pos >= self.display_min) and\
                (self.y_pos <= self.display_max and self.y_pos >= self.display_min) and\
                (self.z_pos <= self.display_max and self.z_pos >= self.display_min):
             self.velocity *= -1
         
+        # applying the velocities
         self.x_pos += self.velocity[0]*dt
         self.y_pos += self.velocity[1]*dt
         self.z_pos += self.velocity[2]*dt
 
 
-    def compute_closest_point(self, arm_points):
+    def compute_closest_point(self, joint_pos):
 
         '''
         Identifies the point on the robot which is closest to the obstacle
 
         Parameters
         ----------
-        arm_points : the coordinates of each of the arm's points ie. [[x1, y1], [x2, y2]] "
+        joint_pos : the coordinates of each of the arm's joints ie. [(x1, y1, z1), (x2, y2, z2), ...]
         '''
 
-        robot_segments = []
         candidate_points = []
 
-        # assembling the coordinates for each segment of the robot [(x1, y1, x2, y2), (x2, y2, x3, y3), ...] 
-        for i in range(len(arm_points)-1):
-            robot_segments.append((arm_points[i][0], arm_points[i][1], arm_points[i+1][0], arm_points[i+1][1]))
-
         # computing the shortest distance between the obstacle and every segment of the robot
-        for segment_i, segment in enumerate(robot_segments):
+        for segment_i in range(len(joint_pos)-1):
 
             seg_pos = None
             c_point = None
             distance = None
             
-            intersect_info = intersect_point_line((self.x_pos, self.y_pos), (segment[0], segment[1]), (segment[2], segment[3]))
+            intersect_info = intersect_point_line((self.x_pos, self.y_pos, self.z_pos), 
+                                                  (joint_pos[segment_i][0], joint_pos[segment_i][1], joint_pos[segment_i][2]), 
+                                                  (joint_pos[segment_i + 1][0], joint_pos[segment_i + 1][1], joint_pos[segment_i + 1][2]))
             
             # handling when the nearest point is outside the segment
             if intersect_info[1] < 0 :
-                c_point = (segment[0], segment[1])
+                c_point = (joint_pos[segment_i][0], joint_pos[segment_i][1], joint_pos[segment_i][2])
                 seg_pos = 0
             elif intersect_info[1] > 1:
-                c_point = (segment[2], segment[3])
+                c_point = (joint_pos[segment_i + 1][0], joint_pos[segment_i + 1][1], joint_pos[segment_i + 1][2])
                 seg_pos = 1
             # handling when the nearest point is on the segment
             else:
@@ -169,10 +177,10 @@ class Obstacle():
                 seg_pos = intersect_info[1]
 
             # computing the distance between the closest point ant the obstacle + adding to the list
-            distance = math.sqrt((c_point[0] - self.x_pos)**2 + (c_point[1] - self.y_pos)**2)
+            distance = math.sqrt((c_point[0] - self.x_pos)**2 + (c_point[1] - self.y_pos)**2 + (c_point[2]-self.z_pos)**2)
             candidate_points.append(ClosestPoint(c_point, distance, segment_i, seg_pos))
 
-        # selecting the closest point accross the whole robot
+        # finding the closest point accross the whole robot arm
         min_d = 1000
         winner_i = 0
         for i, candidate in enumerate(candidate_points):
@@ -189,17 +197,14 @@ class Obstacle():
 
         # getting the previous position of the current closest point
         segment_i = self.closest_point.segment_index
-        l1 = (prev_joint_positions[segment_i + 1][0] - prev_joint_positions[segment_i][0])
-        l2 = (prev_joint_positions[segment_i + 1][1] - prev_joint_positions[segment_i][1])
-        theta = math.atan2(l2, l1)
-        x_diff = self.closest_point.segment_pos * link_lengths[segment_i] * math.cos(theta)
-        y_diff = self.closest_point.segment_pos * link_lengths[segment_i] * math.sin(theta)
-        x_prev = prev_joint_positions[segment_i][0] + x_diff
-        y_prev = prev_joint_positions[segment_i][1] + y_diff
+        first_joint_vector = np.array(prev_joint_positions[segment_i])
+        second_joint_vector = np.array(prev_joint_positions[segment_i + 1])
+        segment_vector = np.array([second_joint_vector[i] - first_joint_vector[i] for i in range(3)])
+        cp_prev_vector = (segment_vector * self.closest_point.segment_pos) + first_joint_vector
        
         # calculating the closest point velocity + calculating the relative velocity
-        cp_velocity = math.sqrt((self.closest_point.coordinates[0] - x_prev)**2 + (self.closest_point.coordinates[1] - y_prev)**2) / dt
-        self.vrel = self.velocity_mod - cp_velocity
+        cp_velocity = np.linalg.norm(np.array(self.closest_point.coordinates) - cp_prev_vector) / dt
+        self.vrel = self.velocity_norm - cp_velocity
 
         # updating d0, since it depends on vrel
         self.d0 = self.d1
@@ -215,7 +220,7 @@ class Obstacle():
         # calculating vrep1
         vrep1 = 0
         if (dmin - self.dcr) < self.d0:
-            vrep1 = self.k1 * ((self.d0/(dmin-self.dcr)) - 1)
+            vrep1 = self.k1 * ((self.d0 / (dmin - self.dcr)) - 1)
 
         # calculating vrep2
         c = 0
@@ -231,7 +236,8 @@ class Obstacle():
         # calculating vrep
         v_x = self.closest_point.coordinates[0] - self.x_pos
         v_y = self.closest_point.coordinates[1] - self.y_pos
-        unit_v = np.array([v_x, v_y]) / math.sqrt(v_x**2 + v_y**2)
+        v_z = self.closest_point.coordinates[2] - self.z_pos
+        unit_v = np.array([v_x, v_y, v_z]) / math.sqrt(v_x**2 + v_y**2 + v_z**2)
         vrep = (vrep1 + vrep2) * unit_v
 
-        return RepulsionVelocity(vrep, [self.x_pos, self.y_pos], copy.deepcopy(self.closest_point))
+        return RepulsionVelocity(vrep, [self.x_pos, self.y_pos, self.z_pos], copy.deepcopy(self.closest_point))

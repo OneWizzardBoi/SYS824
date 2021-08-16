@@ -7,7 +7,7 @@ from NLinkArm3d import NLinkArm
 from obstacle_avoidance import ClosestPoint, Obstacle
 
 # defining control parameters
-Kp = 1.3
+Kp = 1.2
 dt = 0.1
 target_min_distance = 0.05
 
@@ -23,6 +23,7 @@ def main():
     obstacles = [Obstacle(-3, 1.5, -1.5, [0.7, 0, 0]), Obstacle(3, -1, 0.8, [-0.7, 0, 0])]
 
     # init NLinkArm with the (Denavit-Hartenberg parameters) and the target pose
+    link_lengths = [0.7, 1, 1]
     n_link_arm = NLinkArm([[0.         , -math.pi / 2 , 0.7, 0.],
                            [math.pi / 2, math.pi / 2  , 0., 0.],
                            [0.         , -math.pi / 2 , 0., 1],
@@ -30,57 +31,65 @@ def main():
                            [0.         , -math.pi / 2 , 0., 1],
                            [0.         , math.pi / 2  , 0., 0.],
                            [0.         , 0.           , 0., 0.]], ee_target_poses, obstacles=obstacles)
-    
-    # catching the CTRL-C interrupt
-    try:
 
-        first_pass = True
-        while True:
+    # perpetually alternating between the target points
+    first_pass = True
+    while True:
 
-            # defining the target point for the effector
-            n_link_arm.ee_target_pose = ee_target_poses[target_i]
+        # defining the target point for the effector
+        n_link_arm.ee_target_pose = ee_target_poses[target_i]
 
-            # computing / consulting the inverse kinematics solution (target angles) according to the target
-            if goal_joint_angles_saved[target_i] is None:
-                solution_found, goal_joint_angles = n_link_arm.inverse_kinematics(ee_target_poses[target_i])
-                if not first_pass: goal_joint_angles_saved[target_i] = (solution_found, goal_joint_angles)
-            else:
-                solution_found = goal_joint_angles_saved[target_i][0]
-                goal_joint_angles = goal_joint_angles_saved[target_i][1]
-            first_pass = False
+        # computing / consulting the inverse kinematics solution (target angles) according to the target
+        solution_found = False
+        goal_joint_angles = None
+        if goal_joint_angles_saved[target_i] is None:
+            solution_found, goal_joint_angles = n_link_arm.inverse_kinematics(ee_target_poses[target_i])
+            if not first_pass: goal_joint_angles_saved[target_i] = (solution_found, goal_joint_angles)
+        else:
+            solution_found = goal_joint_angles_saved[target_i][0]
+            goal_joint_angles = goal_joint_angles_saved[target_i][1]
+        first_pass = False
 
-            # control to get the effector to the target point
-            if solution_found:
+        # control to get the effector to the target point (if an inverse kinematic solution exists)
+        if solution_found:
 
-                target_reached = False
-                while not target_reached:
+            target_reached = False
+            prev_joint_positions = n_link_arm.get_joint_positions()
 
-                    # getting the current joint angles and effector position
-                    ee_position = n_link_arm.forward_kinematics()[:3]
-                    curr_joint_angles = n_link_arm.get_joint_angles()
-                    
-                    # computing the command angular velocities
-                    joint_angular_vels = Kp * ang_diff(goal_joint_angles, curr_joint_angles)
+            while not target_reached:
 
-                    # applying the joint velocities with a discrete time interval (arm update)
-                    # updating the obstacle positions
-                    n_link_arm.set_joint_angles(curr_joint_angles + joint_angular_vels * dt)
-                    for obstacle in obstacles: obstacle.update_position(dt)
-                    n_link_arm.update_display()
+                # getting the current joint angles and positions
+                curr_joint_angles = n_link_arm.get_joint_angles()
+                arm_joint_positions = n_link_arm.get_joint_positions()
 
-                    # checking if the effector reached the destination
-                    target_ee_d = numpy.linalg.norm(np.array(ee_position) - np.array(target_points[target_i]))
-                    target_reached = target_ee_d <= target_min_distance
+                # computing the repulsion velocities + keeping track of joint positions
+                repulsion_velocities = []
+                for obstacle in obstacles:
+                    obstacle.compute_closest_point(arm_joint_positions)
+                    obstacle.compute_relative_velocity(prev_joint_positions, link_lengths, dt)
+                    repulsion_velocities.append(obstacle.compute_repulsion_vector())
+                prev_joint_positions = n_link_arm.get_joint_positions()
 
-            # notifying of impossible inverse kinematic problem
-            else: print("No inverse kinematic soltion found")
+                # computing the joint velocities vector due to the repulsion vector
+                # ...
+
+                # computing the command angular velocities
+                joint_angular_vels = Kp * ang_diff(goal_joint_angles, curr_joint_angles)
+
+                # applying the joint velocities with a discrete time interval (arm update)
+                # updating the obstacle positions
+                n_link_arm.set_joint_angles(curr_joint_angles + joint_angular_vels * dt)
+                for obstacle in obstacles: obstacle.update_position(dt)
+                n_link_arm.update_display()
+
+                # checking if the effector reached the destination
+                target_ee_d = numpy.linalg.norm(np.array(arm_joint_positions[-1]) - np.array(target_points[target_i]))
+                target_reached = target_ee_d <= target_min_distance
 
             # preparing the selection of the next target point
             target_i = (target_i + 1) % len(target_points)
 
-    except Exception as e: 
-        print(e)
-        exit()
+        else: raise ValueError("No inverse kinematic soltion found")
 
 
 def ang_diff(theta1, theta2):

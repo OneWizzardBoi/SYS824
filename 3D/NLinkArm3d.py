@@ -240,7 +240,7 @@ class NLinkArm:
         
         # plotting the target point
         for ee_target_pose in self.ee_target_poses: 
-            self.ax.plot(ee_target_pose[0], ee_target_pose[1], ee_target_pose[2], 'gx', color="#03fc03")
+            self.ax.plot(ee_target_pose[0], ee_target_pose[1], ee_target_pose[2], 'gx', color="#24a33b")
 
         # plotting the obstacles
         Obstacle.display_obstacles(self.obstacles, self.ax)
