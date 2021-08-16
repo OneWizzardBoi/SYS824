@@ -54,16 +54,16 @@ class NLinkArm:
 
     max_distance_error = 0.05
 
-    def __init__(self, dh_params_list, ee_target_pose):
+    def __init__(self, dh_params_list, ee_target_poses):
 
         '''
         Parameters
         ----------
         dh_params_list : denavit-Hartenberg parameters for the robot
-        ee_target_pose : target pose wich the robot must reach
+        ee_target_poses : target poses wich the robot must reach sequentially
         '''
 
-        self.ee_target_pose = ee_target_pose
+        self.ee_target_poses = ee_target_poses
 
         self.link_list = []
         for i in range(len(dh_params_list)):
@@ -218,10 +218,11 @@ class NLinkArm:
         # plotting the robot's joints and segments
         self.ax.plot(x_list, y_list, z_list, "o-", color="#0331fc", ms=4, mew=0.5)
         self.ax.plot(x_list[0], y_list[0], z_list[0], 'o', color="#000000")
-        self.ax.plot(x_list[-1], y_list[-1], z_list[-1], 'o', color="#000000")
+        self.ax.plot(x_list[-1], y_list[-1], z_list[-1], 'o', color="#ed0707")
         
         # plotting the target point
-        self.ax.plot(self.ee_target_pose[0], self.ee_target_pose[1], self.ee_target_pose[2], 'gx', color="#03fc03")
+        for ee_target_pose in self.ee_target_poses: 
+            self.ax.plot(ee_target_pose[0], ee_target_pose[1], ee_target_pose[2], 'gx', color="#03fc03")
 
         # setting limits
         self.ax.set_xlim(-3, 3)

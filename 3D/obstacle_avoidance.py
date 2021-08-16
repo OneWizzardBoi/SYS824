@@ -81,7 +81,7 @@ class Obstacle():
         self.prev_vrel = 1
         self.d0 = self.d1
         self.closest_point = None
-
+    
 
     @classmethod
     def display_obstacles(cls, obstacles, plt):
