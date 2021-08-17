@@ -8,7 +8,7 @@ from obstacle_avoidance import ClosestPoint, Obstacle
 
 
 # defining control parameters
-Kp = 1
+Kp = 1.3
 dt = 0.1
 target_min_distance = 0.1
 
@@ -36,7 +36,7 @@ def main():
     n_link_arm = NLinkArm(dhp_matrix, ee_target_poses, obstacles=obstacles)
 
     # perpetually alternating between the target points
-    first_pass = True
+    trip_counter = 0
     while True:
 
         # defining the target point for the effector
@@ -47,11 +47,10 @@ def main():
         goal_joint_angles = None
         if goal_joint_angles_saved[target_i] is None:
             solution_found, goal_joint_angles = n_link_arm.inverse_kinematics(ee_target_poses[target_i])
-            if not first_pass: goal_joint_angles_saved[target_i] = (solution_found, goal_joint_angles)
+            if trip_counter > 0 : goal_joint_angles_saved[target_i] = (solution_found, goal_joint_angles)
         else:
             solution_found = goal_joint_angles_saved[target_i][0]
             goal_joint_angles = goal_joint_angles_saved[target_i][1]
-        first_pass = False
 
         # control to get the effector to the target point (if an inverse kinematic solution exists)
         if solution_found:
@@ -93,10 +92,10 @@ def main():
                 if not np.all((rep_angular_vels == 0)): rep_application_i = iter_i
 
                 # computing the command angular velocities
-                sizing_f = 1 - math.exp(-1 * (iter_i - rep_application_i)/ 10)
+                sizing_f = 1 - math.exp(-1 * (iter_i - rep_application_i)/ 20)
                 cmd_angular_vels = sizing_f * Kp * ang_diff(goal_joint_angles, curr_joint_angles)
 
-                # (commutation) : choosing between the (command) joint velocities and the repulsion joint velocities
+                # (commutation) : choosing between the (command) joint velocities and the (repulsion) joint velocities
                 joint_angular_vels = None
                 if np.all((rep_angular_vels == 0)): joint_angular_vels = cmd_angular_vels
                 else: joint_angular_vels = rep_angular_vels
@@ -104,7 +103,8 @@ def main():
                 # applying the joint velocities with a discrete time interval (arm update)
                 # updating the obstacle positions
                 n_link_arm.set_joint_angles(curr_joint_angles + joint_angular_vels * dt)
-                for obstacle in obstacles: obstacle.update_position(dt)
+                if trip_counter > 3:
+                    for obstacle in obstacles: obstacle.update_position(dt)
                 n_link_arm.update_display()
 
                 # checking if the effector reached the destination
@@ -117,6 +117,8 @@ def main():
             target_i = (target_i + 1) % len(target_points)
 
         else: raise ValueError("No inverse kinematic soltion found")
+
+        trip_counter += 1
 
 
 def ang_diff(theta1, theta2):

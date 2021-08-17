@@ -1,5 +1,6 @@
 import sys
 import copy
+import time
 import math
 import numpy as np
 
@@ -23,6 +24,7 @@ def animation():
     joint_angles = np.array([0] * N_LINKS)
     goal_pos = [0, 2]
     arm = NLinkArm(link_lengths, joint_angles, goal_pos, True, obstacles)
+    time.sleep(20)
 
     # getting the inverse kinematics solution (joint_goal_angles)
     joint_goal_angles, solution_found = inverse_kinematics(link_lengths, joint_angles, goal_pos)

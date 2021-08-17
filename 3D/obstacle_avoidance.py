@@ -54,13 +54,13 @@ class Obstacle():
     ''' Class implementing the mathematical modelisation and display of 3D obstacles '''
 
     # mathematical model constants
-    dcr = 0.2      # critical distance (black circle)
-    d1 = 0.4       # minimum radius for repulsion activation (orange circle)
+    dcr = 0.3      # critical distance (black circle)
+    d1 = 0.5       # minimum radius for repulsion activation (orange circle)
     cv = 1         # repulsion radius sizing constant
-    k1 = 4         # vrep1 amplitude constant
-    k2 = 2         # vrep2 amplitude constant
+    k1 = 5         # vrep1 amplitude constant
+    k2 = 3         # vrep2 amplitude constant
     l1 = d1        # lower bound for the damping force (below this c=1)
-    l2 = l1 + 0.2  # upper bound for damping force (above this c=0)
+    l2 = l1 + 0.3  # upper bound for damping force (above this c=0)
     dmax = l2      # maximum radius for repulsion activatio
 
     # graphic display boudaries
