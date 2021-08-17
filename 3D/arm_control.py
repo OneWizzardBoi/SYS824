@@ -6,10 +6,11 @@ import matplotlib.pyplot as plt
 from NLinkArm3d import NLinkArm
 from obstacle_avoidance import ClosestPoint, Obstacle
 
+
 # defining control parameters
-Kp = 1.2
+Kp = 1
 dt = 0.1
-target_min_distance = 0.05
+target_min_distance = 0.1
 
 def main():
     
@@ -22,15 +23,17 @@ def main():
     # initializing the obstacles
     obstacles = [Obstacle(-3, 1.5, -1.5, [0.7, 0, 0]), Obstacle(3, -1, 0.8, [-0.7, 0, 0])]
 
-    # init NLinkArm with the (Denavit-Hartenberg parameters) and the target pose
+    # init NLinkArm with the (Denavit-Hartenberg parameters)
     link_lengths = [0.7, 1, 1]
-    n_link_arm = NLinkArm([[0.         , -math.pi / 2 , 0.7, 0.],
-                           [math.pi / 2, math.pi / 2  , 0., 0.],
-                           [0.         , -math.pi / 2 , 0., 1],
-                           [0.         , math.pi / 2  , 0., 0.],
-                           [0.         , -math.pi / 2 , 0., 1],
-                           [0.         , math.pi / 2  , 0., 0.],
-                           [0.         , 0.           , 0., 0.]], ee_target_poses, obstacles=obstacles)
+    dhp_matrix = [[0.         , -math.pi / 2 , 0.7, 0.],
+                  [math.pi / 2, math.pi / 2  , 0. , 0.],
+                  [0.         , -math.pi / 2 , 0. , 1 ],
+                  [0.         , math.pi / 2  , 0. , 0.],
+                  [0.         , -math.pi / 2 , 0. , 1 ],
+                  [0.         , math.pi / 2  , 0. , 0.],
+                  [0.         , 0.           , 0. , 0.]]
+    segment_indicies = Obstacle.seperate_jacobian_segments(dhp_matrix)
+    n_link_arm = NLinkArm(dhp_matrix, ee_target_poses, obstacles=obstacles)
 
     # perpetually alternating between the target points
     first_pass = True
@@ -56,25 +59,47 @@ def main():
             target_reached = False
             prev_joint_positions = n_link_arm.get_joint_positions()
 
+            # time tracking vars
+            iter_i = 0
+            rep_application_i = 0
+
             while not target_reached:
 
                 # getting the current joint angles and positions
                 curr_joint_angles = n_link_arm.get_joint_angles()
                 arm_joint_positions = n_link_arm.get_joint_positions()
 
-                # computing the repulsion velocities + keeping track of joint positions
+                # computing the repulsion velocities
                 repulsion_velocities = []
                 for obstacle in obstacles:
                     obstacle.compute_closest_point(arm_joint_positions)
                     obstacle.compute_relative_velocity(prev_joint_positions, link_lengths, dt)
                     repulsion_velocities.append(obstacle.compute_repulsion_vector())
+
+                # keping track of joint positions
                 prev_joint_positions = n_link_arm.get_joint_positions()
 
-                # computing the joint velocities vector due to the repulsion vector
-                # ...
+                # computing the repulsion angular velocities
+                rep_angular_vels = np.array([0] * len(dhp_matrix), dtype=np.float)
+                for velocity in repulsion_velocities:
+                    # getting the proper partial jacobian
+                    highest_effected_row = segment_indicies[str(velocity.closest_point.segment_index)][-1]
+                    partial_jacobian_inverse = np.linalg.pinv(n_link_arm.basic_jacobian())[0 : highest_effected_row + 1]
+                    # computing the joint velocities
+                    ang_vels = partial_jacobian_inverse @ np.pad(velocity.vector, (0, 3))
+                    rep_angular_vels += np.pad(ang_vels, (0, len(dhp_matrix) - len(ang_vels)))
+
+                # marking the times repulsion velocity drops to 0
+                if not np.all((rep_angular_vels == 0)): rep_application_i = iter_i
 
                 # computing the command angular velocities
-                joint_angular_vels = Kp * ang_diff(goal_joint_angles, curr_joint_angles)
+                sizing_f = 1 - math.exp(-1 * (iter_i - rep_application_i)/ 10)
+                cmd_angular_vels = sizing_f * Kp * ang_diff(goal_joint_angles, curr_joint_angles)
+
+                # (commutation) : choosing between the (command) joint velocities and the repulsion joint velocities
+                joint_angular_vels = None
+                if np.all((rep_angular_vels == 0)): joint_angular_vels = cmd_angular_vels
+                else: joint_angular_vels = rep_angular_vels
 
                 # applying the joint velocities with a discrete time interval (arm update)
                 # updating the obstacle positions
@@ -85,6 +110,8 @@ def main():
                 # checking if the effector reached the destination
                 target_ee_d = numpy.linalg.norm(np.array(arm_joint_positions[-1]) - np.array(target_points[target_i]))
                 target_reached = target_ee_d <= target_min_distance
+
+                iter_i += 1
 
             # preparing the selection of the next target point
             target_i = (target_i + 1) % len(target_points)

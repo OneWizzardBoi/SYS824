@@ -33,9 +33,7 @@ def animation():
         iter_i = 0
         rep_application_i = 0
 
-        # velocity calculation vars
         prev_joint_positions = arm.points
-        q_rep_total = np.array([0] * N_LINKS, dtype=np.float)
 
         while True:
         
@@ -57,7 +55,7 @@ def animation():
                 # computing the joint velocities vector due to the repulsion vector
                 q_rep_total = np.array([0] * N_LINKS, dtype=np.float)
                 for velocity in repulsion_velocities:
-                    q_rep = partial_jacobian_inverse(link_lengths, joint_angles[0 : obstacle.closest_point.segment_index]) @ velocity.vector 
+                    q_rep = partial_jacobian_inverse(link_lengths, joint_angles[0 : velocity.closest_point.segment_index]) @ velocity.vector 
                     q_rep_total += np.pad(q_rep, (0, N_LINKS-len(q_rep)))
 
                 # marking the times repulsion velocity drops to 0

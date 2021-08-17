@@ -2,6 +2,7 @@ import math
 import numpy as np
 import numpy.linalg
 import matplotlib.pyplot as plt
+from collections import OrderedDict
 from mpl_toolkits.mplot3d.axes3d import Axes3D
 
 from obstacle_avoidance import Obstacle
@@ -201,14 +202,15 @@ class NLinkArm:
             x_list.append(trans[0, 3])
             y_list.append(trans[1, 3])
             z_list.append(trans[2, 3])
-
+    
         # returning the coordinates in the appropriate format
         if plot_format: 
             return x_list, y_list, z_list
         else:
-            return [(x_list[pos_i], y_list[pos_i], z_list[pos_i]) 
-                        for pos_i in range(len(x_list))]
-
+            joint_coordinates = [(x_list[pos_i], y_list[pos_i], z_list[pos_i]) 
+                                    for pos_i in range(len(x_list))]
+            return list(OrderedDict.fromkeys(joint_coordinates))
+            
 
     def get_joint_angles(self):
         ''' Getting the (theta) variable in the Denavit-Hartenberg parameters '''

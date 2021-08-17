@@ -241,3 +241,29 @@ class Obstacle():
         vrep = (vrep1 + vrep2) * unit_v
 
         return RepulsionVelocity(vrep, [self.x_pos, self.y_pos, self.z_pos], copy.deepcopy(self.closest_point))
+
+
+    @staticmethod
+    def seperate_jacobian_segments(dhp_matrix):
+
+        ''' Returns the row indicies associated whith each robot segment '''
+
+        row_i = 0
+        segment_i = 0
+        segment_indicies = {}
+
+        # getting a list of the DHP (d) parameters
+        d_params = [dhp_row[-1] for dhp_row in dhp_matrix]
+
+        for row_i in range(len(d_params)):
+
+            if row_i == 0: segment_indicies[str(segment_i)] = []
+
+            if (not d_params[row_i] == 0) and (not row_i == 0) :
+                segment_i += 1
+                segment_indicies[str(segment_i)] = []
+                segment_indicies[str(segment_i)].append(row_i)
+
+            else: segment_indicies[str(segment_i)].append(row_i)
+
+        return segment_indicies
